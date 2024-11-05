@@ -1,11 +1,18 @@
 use std::io;
+use std::sync::mpsc;
+use std::thread;
 use nannou::{draw, prelude::*};
 use reqwest::blocking::Client;
 use serde_json::Value;
 
+/// The main model of the application.
+/// This is where you would define fields that describe the state of your application.
+/// This model is then passed to the `view` function where it is used to draw the state of the
+/// application to the screen.
 struct Model {
     texture: wgpu::Texture,
     city: ((f64, i64), String),
+    receiver: mpsc::Receiver<String>,
 }
 
 fn main() {
@@ -13,12 +20,28 @@ fn main() {
     println!("This application provides real time visualization of the weather in a city of your choice.");
     println!("The visualization will be displayed in a window and will include a representation of the weather conditions in the city and the temperature.");
     println!("");
-    nannou::app(model).run();
+    println!("Would you like to begin?");
+    println!("Enter 'y' to start or any other key to exit: ");
+    let mut start = String::new();
+    io::stdin().read_line(&mut start).expect("Failed to read line");
+    start = start.trim().to_string();
+
+    if start == "y" {
+        nannou::app(model).update(update).run();
+    }
+    else {
+        println!("Goodbye!");
+    }
+
+    return;
+    
 }
+
 
     
 
-// Asks the user to input the name of a city
+/// The function that asks the user to the name of the city they would like the weather for.
+/// The function returns the name of the city as a String.
 fn get_city()-> String {
     println!("Enter the name of a city you would like the weather for:");
     let mut city = String::new();
@@ -27,6 +50,8 @@ fn get_city()-> String {
     city
 }
 
+/// The function that returns the filepath of the image of the city.
+/// The function takes in the name of the city as a String and returns the filepath of the image of the city as a String.
 fn get_city_filepath(city: &String) -> String {
     let mut filepath = "";
 
@@ -50,7 +75,9 @@ fn get_city_filepath(city: &String) -> String {
     return filepath.to_string();
 }
 
-//gets the weather for the inputted city
+/// The function that gets the weather data for the city.
+/// The function takes in the name of the city as a String and returns a compound tuple containing the temperature, the weather id,
+/// and the weather forecast as a String.
 fn get_weather(city: &String) -> ((f64, i64), String) {
     let api_key = "821c7713a2d08ad1cab07370fa82cfb7";
     let url = format!("https://api.openweathermap.org/data/2.5/weather?q={}&appid={}&units=metric", city, api_key);
@@ -65,6 +92,7 @@ fn get_weather(city: &String) -> ((f64, i64), String) {
     let weather_id = json["weather"][0]["id"].as_i64().unwrap();
     let city_name_fixed = json["name"].as_str().unwrap().to_string();
     println!("The temperature in {} is {} degrees Celsius and the forecast is: {}", city_name_fixed, temperature, weather);
+    println!("If you would like to exit the simulation, press 'x' and hit enter.");
 
     return ((temperature, weather_id), weather);
 
@@ -74,10 +102,27 @@ fn get_weather(city: &String) -> ((f64, i64), String) {
 }
 
 
-//creates the model
+/// The function that initializes the model of the application.
+/// The function takes in a reference to the App and returns a Model.
 fn model(app: &App) -> Model {
     let my_city = get_city();
     let filepath = get_city_filepath(&my_city);
+
+    // Create a channel for communication between threads
+    let (sender, receiver) = mpsc::channel();
+
+    // Spawn a thread to handle user input
+    thread::spawn(move || {
+        loop {
+            let mut input = String::new();
+            io::stdin().read_line(&mut input).expect("Failed to read line");
+            let input = input.trim().to_string();
+            if input.to_lowercase() == "x" {
+                sender.send(input).expect("Failed to send input");
+                break;
+            }
+        }
+    });
 
     // Create a new window!
     app.new_window()
@@ -92,10 +137,25 @@ fn model(app: &App) -> Model {
     Model { 
         texture: my_texture, 
         city: weather,
+        receiver,
     }
 }
 
-//renders the visualization
+fn update(app: &App, model: &mut Model, _update: Update) {
+    // Check for user input to close the window
+    if let Ok(input) = model.receiver.try_recv() {
+        if input.to_lowercase() == "x" {
+            app.set_exit_on_escape(false);
+            println!("");
+            println!("I hope you enjoyed your weather visualization. Goodbye!");
+            app.quit();
+        }
+    }
+}
+
+/// The function that draws the state of the application to the screen.
+/// The function takes in a reference to the App, a reference to the Model, and a Frame.
+/// It will also analyze the weather data to return the correct weather visualization for the chosen city.
 fn view(app: &App, model: &Model, frame: Frame) {
 
     let (temperature, weather) = &model.city.0;
@@ -197,6 +257,9 @@ fn view(app: &App, model: &Model, frame: Frame) {
     draw.to_frame(app, &frame).unwrap();
 }
 
+/// The function that returns the color of the temperature.
+/// The function takes in a reference to the temperature as a f64 and returns the color of the temperature as an Srgb<u8>.
+/// The color of the temperature is determined by the temperature value.
 fn get_temp_color(temperature: &f64) -> Srgb<u8> {
 
     let my_temp;
@@ -242,6 +305,7 @@ fn get_temp_color(temperature: &f64) -> Srgb<u8> {
     my_temp
 }
 
+/// The function that draws the weather label on the screen.
 fn draw_weather_label(model: &Model, app: &App, temp: Srgb<u8>) {
     let draw = app.draw();
     draw.texture(&model.texture);
@@ -268,7 +332,7 @@ fn draw_weather_label(model: &Model, app: &App, temp: Srgb<u8>) {
 
 }
 
-
+/// The function that draws the weather visualization for different heaviness of rain.
 fn draw_rain(model: &Model, app: &App, temp: Srgb<u8>, speed: i32) {
     let draw = app.draw();
     draw.texture(&model.texture);
@@ -286,8 +350,7 @@ fn draw_rain(model: &Model, app: &App, temp: Srgb<u8>, speed: i32) {
 
 }
 
-
-
+/// The function that draws the weather visualization for thunderstorms.
 fn draw_thunderstorm(model: &Model, app: &App, temp: Srgb<u8>, speed: i32) {
     let draw = app.draw();
     draw.texture(&model.texture);
@@ -312,7 +375,7 @@ fn draw_thunderstorm(model: &Model, app: &App, temp: Srgb<u8>, speed: i32) {
 
 }
 
-
+/// The function that draws the weather visualization for snow.
 fn draw_snow(model: &Model, app: &App, temp: Srgb<u8>) {
     let draw = app.draw();
     draw.texture(&model.texture);
@@ -330,6 +393,7 @@ fn draw_snow(model: &Model, app: &App, temp: Srgb<u8>) {
 
 }
 
+/// The function that draws the weather visualization for sleet.
 fn draw_sleet(model: &Model, app: &App, temp: Srgb<u8>) {
     let draw = app.draw();
     draw.texture(&model.texture);
@@ -347,7 +411,7 @@ fn draw_sleet(model: &Model, app: &App, temp: Srgb<u8>) {
 
 }
 
-
+/// The function that draws the weather visualization for different cloud coverages.
 fn draw_overcast(model: &Model, app: &App, temp: Srgb<u8>, speed: i32, rain: bool) {
     let draw = app.draw();
     draw.texture(&model.texture);
@@ -383,6 +447,7 @@ fn draw_overcast(model: &Model, app: &App, temp: Srgb<u8>, speed: i32, rain: boo
 
 }
 
+/// The function that draws the weather visualization for different atmospheric particles.
 fn draw_atmospheric_particles(model: &Model, app: &App, temp: Srgb<u8>, weather_cond: Srgb<u8>) {
     let draw = app.draw();
     draw.texture(&model.texture);
@@ -400,6 +465,7 @@ fn draw_atmospheric_particles(model: &Model, app: &App, temp: Srgb<u8>, weather_
 
 }
 
+/// The function that draws the weather visualization for squalls.
 fn draw_squalls(model: &Model, app: &App, temp: Srgb<u8>) {
     let draw = app.draw();
     draw.texture(&model.texture);
@@ -424,6 +490,7 @@ fn draw_squalls(model: &Model, app: &App, temp: Srgb<u8>) {
 
 }
 
+/// The function that draws the weather visualization for tornado.
 fn draw_tornado(model: &Model, app: &App, temp: Srgb<u8>) {
     let draw = app.draw();
     draw.texture(&model.texture);
@@ -454,6 +521,7 @@ fn draw_tornado(model: &Model, app: &App, temp: Srgb<u8>) {
 
 }
 
+/// The function that draws the weather visualization for a sun in the sky.
 fn draw_clear_sky(model: &Model, app: &App, temp: Srgb<u8>) {
     let draw = app.draw();
     draw.texture(&model.texture);
