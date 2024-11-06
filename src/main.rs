@@ -1,9 +1,11 @@
-use nannou::{draw, prelude::*};
+use nannou::{ prelude::*};
 use reqwest::blocking::Client;
 use serde_json::Value;
 use std::io;
 use std::sync::mpsc;
 use std::thread;
+use dotenvy::dotenv;
+use std::env;
 
 /// The main model of the application.
 /// This is where you would define fields that describe the state of your application.
@@ -15,20 +17,31 @@ struct Model {
     receiver: mpsc::Receiver<String>,
 }
 
+
 fn main() {
+    dotenv().ok();
+
     println!("****** Welcome to Haley's Weather Visualization App! ******");
     println!("This application provides real time visualization of the weather in a city of your choice.");
     println!("The visualization will be displayed in a window and will include a representation of the weather conditions in the city and the temperature.");
     println!("");
-    println!("Would you like to begin?");
-    println!("Enter 'y' to start or any other key to exit: ");
+    println!("Would you like to begin? (y/n):");
     let mut start = String::new();
     io::stdin()
         .read_line(&mut start)
         .expect("Failed to read line");
     start = start.trim().to_string();
 
-    if start == "y" {
+    while start.to_lowercase() != "y" && start.to_lowercase() != "n" {
+        println!("Invalid input. Please enter 'y' to start or 'n' to exit: ");
+        start = String::new();
+        io::stdin()
+            .read_line(&mut start)
+            .expect("Failed to read line");
+        start = start.trim().to_string();
+    }
+
+    if start.to_lowercase() == "y" {
         nannou::app(model).update(update).run();
     } else {
         println!("Goodbye!");
@@ -40,13 +53,34 @@ fn main() {
 /// The function that asks the user to the name of the city they would like the weather for.
 /// The function returns the name of the city as a String.
 fn get_city() -> String {
+    dotenv().ok();
+    let api_key = env::var("API_KEY").expect("API_KEY must be set");
+
     println!("Enter the name of a city you would like the weather for:");
     let mut city = String::new();
+
     io::stdin()
         .read_line(&mut city)
         .expect("Failed to read line");
     city = city.trim().to_string();
-    city
+
+    let url = format!(
+        "https://api.openweathermap.org/data/2.5/weather?q={}&appid={}&units=metric",
+        city, api_key
+    );
+
+    let client = Client::new();
+    let response = client.get(&url).send().unwrap();
+
+    if response.status().is_success() {
+        city
+    }
+    else {
+        println!("City not found. Please enter a valid city name.");
+        get_city()
+    }
+
+    
 }
 
 /// The function that returns the filepath of the image of the city.
@@ -78,7 +112,9 @@ fn get_city_filepath(city: &String) -> String {
 /// The function takes in the name of the city as a String and returns a compound tuple containing the temperature, the weather id,
 /// and the weather forecast as a String.
 fn get_weather(city: &String) -> ((f64, i64), String) {
-    let api_key = "821c7713a2d08ad1cab07370fa82cfb7";
+    dotenv().ok();
+    let api_key = env::var("API_KEY").expect("API_KEY must be set");
+
     let url = format!(
         "https://api.openweathermap.org/data/2.5/weather?q={}&appid={}&units=metric",
         city, api_key
@@ -96,6 +132,7 @@ fn get_weather(city: &String) -> ((f64, i64), String) {
             .to_string();
         let weather_id = json["weather"][0]["id"].as_i64().unwrap();
         let city_name_fixed = json["name"].as_str().unwrap().to_string();
+
         println!(
             "The temperature in {} is {} degrees Celsius and the forecast is: {}",
             city_name_fixed, temperature, weather
