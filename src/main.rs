@@ -1,9 +1,8 @@
-use nannou::{ prelude::*};
+use nannou::prelude::*;
 use reqwest::blocking::Client;
 use serde_json::Value;
-use std::io;
 use std::sync::mpsc;
-use std::thread;
+use std::{io, thread};
 use dotenvy::dotenv;
 use std::env;
 
@@ -24,6 +23,7 @@ fn main() {
     println!("****** Welcome to Haley's Weather Visualization App! ******");
     println!("This application provides real time visualization of the weather in a city of your choice.");
     println!("The visualization will be displayed in a window and will include a representation of the weather conditions in the city and the temperature.");
+    println!("For a special visualization effect, choose a city from the following list: Kyoto, London, Madrid, Nashville, New York.");
     println!("");
     println!("Would you like to begin? (y/n):");
     let mut start = String::new();
@@ -83,6 +83,7 @@ fn get_city() -> String {
     
 }
 
+
 /// The function that returns the filepath of the image of the city.
 /// The function takes in the name of the city as a String and returns the filepath of the image of the city as a String.
 fn get_city_filepath(city: &String) -> String {
@@ -137,7 +138,9 @@ fn get_weather(city: &String) -> ((f64, i64), String) {
             "The temperature in {} is {} degrees Celsius and the forecast is: {}",
             city_name_fixed, temperature, weather
         );
+        println!("");
         println!("If you would like to exit the simulation, press 'x' and hit enter.");
+        println!("To see a visualization for a new city, press 'w' and hit enter.");
 
         return ((temperature, weather_id), weather);
     } else {
@@ -161,9 +164,15 @@ fn model(app: &App) -> Model {
             .read_line(&mut input)
             .expect("Failed to read line");
         let input = input.trim().to_string();
-        if input.to_lowercase() == "x" {
+        let input_clone = input.clone();
+        if input_clone.to_lowercase() == "x" || input_clone.to_lowercase() == "w" {
             sender.send(input).expect("Failed to send input");
-            break;
+            if input_clone.to_lowercase() == "x" {
+                break;
+            }
+            else {
+                println!("Great! Let's visualize the weather in a new city.");
+            }
         }
     });
 
@@ -188,6 +197,16 @@ fn update(app: &App, model: &mut Model, _update: Update) {
             println!("");
             println!("I hope you enjoyed your weather visualization. Goodbye!");
             app.quit();
+        } else if input.to_lowercase() == "w" {
+            //instead make a city validation method so this can split?
+            
+            let new_city = get_city();
+            let new_filepath = get_city_filepath(&new_city);
+            let new_texture = wgpu::Texture::from_path(app, new_filepath).unwrap();
+            let new_weather = get_weather(&new_city);
+
+            model.texture = new_texture;
+            model.city = new_weather;
         }
     }
 }
