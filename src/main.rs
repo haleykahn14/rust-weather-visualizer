@@ -5,6 +5,7 @@ use std::sync::mpsc;
 use std::{io, thread};
 use dotenvy::dotenv;
 use std::env;
+use std::sync::{Arc, Mutex};
 
 /// The main model of the application.
 /// This is where you would define fields that describe the state of your application.
@@ -14,12 +15,15 @@ struct Model {
     texture: wgpu::Texture,
     city: ((f64, i64), String),
     receiver: mpsc::Receiver<String>,
-}
+    read_flag: Arc<Mutex<bool>>,
+    }
+
 
 
 fn main() {
     dotenv().ok();
 
+    println!("");
     println!("****** Welcome to Haley's Weather Visualization App! ******");
     println!("This application provides real time visualization of the weather in a city of your choice.");
     println!("The visualization will be displayed in a window and will include a representation of the weather conditions in the city and the temperature.");
@@ -151,34 +155,47 @@ fn get_weather(city: &String) -> ((f64, i64), String) {
 /// The function that initializes the model of the application.
 /// The function takes in a reference to the App and returns a Model.
 fn model(app: &App) -> Model {
-    let my_city = get_city();
-    let filepath = get_city_filepath(&my_city);
-
-    // Create a channel for communication between threads
+    // Initialize the read_flag to false to prevent the background thread from reading stdin initially
+    let read_flag = Arc::new(Mutex::new(false));
     let (sender, receiver) = mpsc::channel();
 
     // Spawn a thread to handle user input
-    thread::spawn(move || loop {
-        let mut input = String::new();
-        io::stdin()
-            .read_line(&mut input)
-            .expect("Failed to read line");
-        let input = input.trim().to_string();
-        let input_clone = input.clone();
-        if input_clone.to_lowercase() == "x" || input_clone.to_lowercase() == "w" {
-            sender.send(input).expect("Failed to send input");
-            if input_clone.to_lowercase() == "x" {
-                break;
+    let read_flag_clone = Arc::clone(&read_flag);
+    thread::spawn(move || {
+        let stdin = io::stdin(); // Get the stdin handle outside of the loop
+        loop {
+            // Only attempt to read if the flag is true
+            if *read_flag_clone.lock().unwrap() {
+                let mut input = String::new();
+                match stdin.read_line(&mut input) {
+                    Ok(_) => {
+                        let input_trimmed = input.trim().to_string();
+                        if input_trimmed.to_lowercase() == "x" || input_trimmed.to_lowercase() == "w" {
+                            sender.send(input_trimmed.clone()).expect("Failed to send input");
+                            if input_trimmed.to_lowercase() == "x" {
+                                break;
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("Failed to read line: {}", e);
+                        break;
+                    }
+                }
             }
-            else {
-                println!("Great! Let's visualize the weather in a new city.");
-            }
+            // Sleep for a short duration to prevent high CPU usage
+            thread::sleep(std::time::Duration::from_millis(100));
         }
     });
 
-    // Create a new window!
-    app.new_window().size(1024, 512).view(view).build().unwrap();
+    // Get the initial city from the user
+    let my_city = get_city();
 
+    // Set the read_flag to true now that we have the initial city
+    *read_flag.lock().unwrap() = true;
+
+    let filepath = get_city_filepath(&my_city);
+    app.new_window().size(1024, 512).view(view).build().unwrap();
     let my_texture = wgpu::Texture::from_path(app, filepath).unwrap();
     let weather = get_weather(&my_city);
 
@@ -186,11 +203,12 @@ fn model(app: &App) -> Model {
         texture: my_texture,
         city: weather,
         receiver,
+        read_flag, // Store the flag in the model
     }
 }
 
 fn update(app: &App, model: &mut Model, _update: Update) {
-    // Check for user input to close the window
+    // Check for user input to close the window or get a new city
     if let Ok(input) = model.receiver.try_recv() {
         if input.to_lowercase() == "x" {
             app.set_exit_on_escape(false);
@@ -198,8 +216,12 @@ fn update(app: &App, model: &mut Model, _update: Update) {
             println!("I hope you enjoyed your weather visualization. Goodbye!");
             app.quit();
         } else if input.to_lowercase() == "w" {
-            //instead make a city validation method so this can split?
-            
+            // Set the flag to false to stop reading from stdin in the background thread
+            *model.read_flag.lock().unwrap() = false;
+
+            // Wait for a short duration to ensure the background thread has stopped reading from stdin
+            thread::sleep(std::time::Duration::from_millis(100));
+
             let new_city = get_city();
             let new_filepath = get_city_filepath(&new_city);
             let new_texture = wgpu::Texture::from_path(app, new_filepath).unwrap();
@@ -207,6 +229,9 @@ fn update(app: &App, model: &mut Model, _update: Update) {
 
             model.texture = new_texture;
             model.city = new_weather;
+
+            // Set the flag back to true to resume reading from stdin in the background thread
+            *model.read_flag.lock().unwrap() = true;
         }
     }
 }
@@ -632,4 +657,77 @@ fn draw_clear_sky(model: &Model, app: &App, temp: Srgb<u8>) {
             .weight(2.0)
             .color(YELLOW);
     }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use reqwest::blocking::Client;
+    use serde_json::Value;
+
+    #[test]
+    fn test_get_city_filepath() {
+        assert_eq!(get_city_filepath(&"Kyoto".to_string()), "src/assets/kyoto.png");
+        assert_eq!(get_city_filepath(&"Tokyo".to_string()), "src/assets/tokyo.png");
+        assert_eq!(get_city_filepath(&"London".to_string()), "src/assets/london.png");
+        assert_eq!(get_city_filepath(&"Madrid".to_string()), "src/assets/madrid.png");
+        assert_eq!(get_city_filepath(&"Nashville".to_string()), "src/assets/nashville.png");
+        assert_eq!(get_city_filepath(&"New York".to_string()), "src/assets/newyork.png");
+        assert_eq!(get_city_filepath(&"Unknown".to_string()), "src/assets/Empty.png");
+    }
+
+    #[test]
+    fn test_get_weather() {
+        dotenv().ok();
+        let api_key = env::var("API_KEY").expect("API_KEY must be set");
+
+        let city = "London".to_string();
+        let url = format!(
+            "https://api.openweathermap.org/data/2.5/weather?q={}&appid={}&units=metric",
+            city, api_key
+        );
+
+        let client = Client::new();
+        let response = client.get(&url).send().unwrap();
+
+        if response.status().is_success() {
+            let json: Value = response.json().unwrap();
+            let temperature = json["main"]["temp"].as_f64().unwrap();
+            let weather = json["weather"][0]["description"]
+                .as_str()
+                .unwrap()
+                .to_string();
+            let weather_id = json["weather"][0]["id"].as_i64().unwrap();
+            let city_name_fixed = json["name"].as_str().unwrap().to_string();
+
+            let weather_data = get_weather(&city);
+            assert_eq!(weather_data.0 .0, temperature);
+            assert_eq!(weather_data.0 .1, weather_id);
+            assert_eq!(weather_data.1, weather);
+        } else {
+            let weather_data = get_weather(&city);
+            assert_eq!(weather_data.0 .0, 0.0);
+            assert_eq!(weather_data.0 .1, 0);
+            assert_eq!(weather_data.1, "No weather data available".to_string());
+        }
+    }
+
+    #[test]
+    fn test_get_temp_color() {
+        assert_eq!(get_temp_color(&50.0), BLACK);
+        assert_eq!(get_temp_color(&40.0), DARKRED);
+        assert_eq!(get_temp_color(&30.0), CRIMSON);
+        assert_eq!(get_temp_color(&25.0), ORANGERED);
+        assert_eq!(get_temp_color(&20.0), ORANGE);
+        assert_eq!(get_temp_color(&15.0), GOLD);
+        assert_eq!(get_temp_color(&5.0), LIGHTYELLOW);
+        assert_eq!(get_temp_color(&0.0), PALEGREEN);
+        assert_eq!(get_temp_color(&-5.0), POWDERBLUE);
+        assert_eq!(get_temp_color(&-15.0), ROYALBLUE);
+        assert_eq!(get_temp_color(&-20.0), SLATEBLUE);
+        assert_eq!(get_temp_color(&-25.0), REBECCAPURPLE);
+        assert_eq!(get_temp_color(&-30.0), INDIGO);
+    }
+
 }
