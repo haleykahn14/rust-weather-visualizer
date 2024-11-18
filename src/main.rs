@@ -1,11 +1,11 @@
+use dotenvy::dotenv;
 use nannou::prelude::*;
 use reqwest::blocking::Client;
 use serde_json::Value;
-use std::sync::mpsc;
-use std::{io, thread};
-use dotenvy::dotenv;
 use std::env;
+use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
+use std::{io, thread};
 
 /// The main model of the application.
 /// This is where you would define fields that describe the state of your application.
@@ -16,9 +16,7 @@ struct Model {
     city: ((f64, i64), String),
     receiver: mpsc::Receiver<String>,
     read_flag: Arc<Mutex<bool>>,
-    }
-
-
+}
 
 fn main() {
     dotenv().ok();
@@ -30,6 +28,7 @@ fn main() {
     println!("For a special visualization effect, choose a city from the following list: Kyoto, London, Madrid, Nashville, New York.");
     println!("");
     println!("Would you like to begin? (y/n):");
+
     let mut start = String::new();
     io::stdin()
         .read_line(&mut start)
@@ -78,15 +77,11 @@ fn get_city() -> String {
 
     if response.status().is_success() {
         city
-    }
-    else {
+    } else {
         println!("City not found. Please enter a valid city name.");
         get_city()
     }
-
-    
 }
-
 
 /// The function that returns the filepath of the image of the city.
 /// The function takes in the name of the city as a String and returns the filepath of the image of the city as a String.
@@ -170,8 +165,12 @@ fn model(app: &App) -> Model {
                 match stdin.read_line(&mut input) {
                     Ok(_) => {
                         let input_trimmed = input.trim().to_string();
-                        if input_trimmed.to_lowercase() == "x" || input_trimmed.to_lowercase() == "w" {
-                            sender.send(input_trimmed.clone()).expect("Failed to send input");
+                        if input_trimmed.to_lowercase() == "x"
+                            || input_trimmed.to_lowercase() == "w"
+                        {
+                            sender
+                                .send(input_trimmed.clone())
+                                .expect("Failed to send input");
                             if input_trimmed.to_lowercase() == "x" {
                                 break;
                             }
@@ -371,7 +370,7 @@ fn view(app: &App, model: &Model, frame: Frame) {
 }
 
 /// The function that returns the color of the temperature.
-/// The function takes in a reference to the temperature as a f64 and returns the color of the temperature as an Srgb<u8>.
+/// The function takes in a reference to the temperature as a f64 and returns the color of the temperature as an `Srgb<u8>`.
 /// The color of the temperature is determined by the temperature value.
 fn get_temp_color(temperature: &f64) -> Srgb<u8> {
     let my_temp;
@@ -659,7 +658,6 @@ fn draw_clear_sky(model: &Model, app: &App, temp: Srgb<u8>) {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -668,13 +666,34 @@ mod tests {
 
     #[test]
     fn test_get_city_filepath() {
-        assert_eq!(get_city_filepath(&"Kyoto".to_string()), "src/assets/kyoto.png");
-        assert_eq!(get_city_filepath(&"Tokyo".to_string()), "src/assets/tokyo.png");
-        assert_eq!(get_city_filepath(&"London".to_string()), "src/assets/london.png");
-        assert_eq!(get_city_filepath(&"Madrid".to_string()), "src/assets/madrid.png");
-        assert_eq!(get_city_filepath(&"Nashville".to_string()), "src/assets/nashville.png");
-        assert_eq!(get_city_filepath(&"New York".to_string()), "src/assets/newyork.png");
-        assert_eq!(get_city_filepath(&"Unknown".to_string()), "src/assets/Empty.png");
+        assert_eq!(
+            get_city_filepath(&"Kyoto".to_string()),
+            "src/assets/kyoto.png"
+        );
+        assert_eq!(
+            get_city_filepath(&"Tokyo".to_string()),
+            "src/assets/tokyo.png"
+        );
+        assert_eq!(
+            get_city_filepath(&"London".to_string()),
+            "src/assets/london.png"
+        );
+        assert_eq!(
+            get_city_filepath(&"Madrid".to_string()),
+            "src/assets/madrid.png"
+        );
+        assert_eq!(
+            get_city_filepath(&"Nashville".to_string()),
+            "src/assets/nashville.png"
+        );
+        assert_eq!(
+            get_city_filepath(&"New York".to_string()),
+            "src/assets/newyork.png"
+        );
+        assert_eq!(
+            get_city_filepath(&"Unknown".to_string()),
+            "src/assets/Empty.png"
+        );
     }
 
     #[test]
@@ -729,5 +748,4 @@ mod tests {
         assert_eq!(get_temp_color(&-25.0), REBECCAPURPLE);
         assert_eq!(get_temp_color(&-30.0), INDIGO);
     }
-
 }
