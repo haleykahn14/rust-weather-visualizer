@@ -713,34 +713,34 @@ mod tests {
 }
 
 #[test]
-    fn test_get_weather() {
-        dotenv().ok();
-        let api_key = env::var("API_KEY").expect("API_KEY must be set");
+fn test_get_weather() {
+    dotenv().ok();
+    let api_key = env::var("API_KEY").expect("API_KEY must be set");
 
-        let city = "London".to_string();
-        let url = format!(
-            "https://api.openweathermap.org/data/2.5/weather?q={}&appid={}&units=metric",
-            city, api_key
-        );
+    let city = "London".to_string();
+    let url = format!(
+        "https://api.openweathermap.org/data/2.5/weather?q={}&appid={}&units=metric",
+        city, api_key
+    );
 
-        let client = Client::new();
-        let response = client.get(&url).send().unwrap();
+    let client = Client::new();
+    let response = client.get(&url).send().unwrap();
 
-        if response.status().is_success() {
-            let json: Value = response.json().unwrap();
-            let temperature = json["main"]["temp"].as_f64().unwrap();
-            let weather = json["weather"][0]["description"]
-                .as_str()
-                .unwrap()
-                .to_string();
-            let weather_id = json["weather"][0]["id"].as_i64().unwrap();
-            let city_name_fixed = json["name"].as_str().unwrap().to_string();
+    if response.status().is_success() {
+        let json: Value = response.json().unwrap();
+        let temperature = json["main"]["temp"].as_f64().unwrap();
+        let weather = json["weather"][0]["description"]
+            .as_str()
+            .unwrap()
+            .to_string();
+        let weather_id = json["weather"][0]["id"].as_i64().unwrap();
+        let city_name_fixed = json["name"].as_str().unwrap().to_string();
 
-            assert_eq!(city_name_fixed, "London");
-            assert!(temperature > -50.0 && temperature < 50.0);
-            assert!(!weather.is_empty());
-            assert!(weather_id > 0);
-        } else {
-            panic!("Failed to get weather data");
-        }
+        assert_eq!(city_name_fixed, "London");
+        assert!(temperature > -50.0 && temperature < 50.0);
+        assert!(!weather.is_empty());
+        assert!(weather_id > 0);
+    } else {
+        panic!("Failed to get weather data");
     }
+}
