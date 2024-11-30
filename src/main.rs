@@ -661,6 +661,17 @@ fn draw_clear_sky(model: &Model, app: &App, temp: Srgb<u8>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::env;
+    use std::sync::Once;
+
+    // Ensure that the .env file is loaded only once
+    static INIT: Once = Once::new();
+
+    fn setup() {
+        INIT.call_once(|| {
+            dotenv().ok();
+        });
+    }
 
     #[test]
     fn test_get_city_filepath() {
