@@ -1,0 +1,29 @@
+name: CI
+
+on: [push]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v2
+
+    - name: Set up Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        override: true
+
+    - name: Update Rust
+      run: rustup update
+
+    - name: Install dependencies
+      run: cargo fetch
+
+    - name: Run cargo fmt
+      run: cargo fmt -- --check
+
+    - name: Run tests
+      run: cargo test
