@@ -661,8 +661,6 @@ fn draw_clear_sky(model: &Model, app: &App, temp: Srgb<u8>) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use reqwest::blocking::Client;
-    use serde_json::Value;
 
     #[test]
     fn test_get_city_filepath() {
