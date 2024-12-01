@@ -727,24 +727,27 @@ mod tests {
     fn test_get_weather() {
         setup();
 
-        let _m = mock("GET", "/data/2.5/weather")
-            .with_status(200)
-            .with_header("content-type", "application/json")
-            .with_body(
-                r#"{
-            "main": {
-                "temp": 15.0
-            },
-            "weather": [
-                {
-                    "id": 800,
-                    "description": "clear sky"
-                }
-            ],
-            "name": "London"
-        }"#,
-            )
-            .create();
+        let _m = mock(
+            "GET",
+            "/data/2.5/weather?q=London&appid=mock_api_key&units=metric",
+        )
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(
+            r#"{
+                "main": {
+                    "temp": 15.0
+                },
+                "weather": [
+                    {
+                        "id": 800,
+                        "description": "clear sky"
+                    }
+                ],
+                "name": "London"
+            }"#,
+        )
+        .create();
 
         let city = "London".to_string();
         let url = format!(
