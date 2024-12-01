@@ -663,6 +663,7 @@ mod tests {
     use super::*;
     use std::env;
     use std::sync::Once;
+    use mockito::mock;
 
     // Ensure that the .env file is loaded only once
     static INIT: Once = Once::new();
@@ -721,18 +722,30 @@ mod tests {
         assert_eq!(get_temp_color(&-25.0), REBECCAPURPLE);
         assert_eq!(get_temp_color(&-30.0), INDIGO);
     }
-}
 
-#[test]
-fn test_get_weather() {
-    dotenv().ok();
-    let api_key = env::var("API_KEY").expect("API_KEY must be set");
+    #[test]
+    fn test_get_weather() {
+    setup();
+
+    let _m = mock("GET", "/data/2.5/weather")
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(r#"{
+            "main": {
+                "temp": 15.0
+            },
+            "weather": [
+                {
+                    "id": 800,
+                    "description": "clear sky"
+                }
+            ],
+            "name": "London"
+        }"#)
+        .create();
 
     let city = "London".to_string();
-    let url = format!(
-        "https://api.openweathermap.org/data/2.5/weather?q={}&appid={}&units=metric",
-        city, api_key
-    );
+    let url = format!("{}/data/2.5/weather?q={}&appid=mock_api_key&units=metric", &mockito::server_url(), city);
 
     let client = Client::new();
     let response = client.get(&url).send().unwrap();
@@ -754,4 +767,12 @@ fn test_get_weather() {
     } else {
         panic!("Failed to get weather data");
     }
+    }
 }
+
+
+
+
+
+
+
