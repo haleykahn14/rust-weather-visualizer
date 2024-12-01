@@ -661,9 +661,9 @@ fn draw_clear_sky(model: &Model, app: &App, temp: Srgb<u8>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use mockito::mock;
     use std::env;
     use std::sync::Once;
-    use mockito::mock;
 
     // Ensure that the .env file is loaded only once
     static INIT: Once = Once::new();
@@ -725,12 +725,13 @@ mod tests {
 
     #[test]
     fn test_get_weather() {
-    setup();
+        setup();
 
-    let _m = mock("GET", "/data/2.5/weather")
-        .with_status(200)
-        .with_header("content-type", "application/json")
-        .with_body(r#"{
+        let _m = mock("GET", "/data/2.5/weather")
+            .with_status(200)
+            .with_header("content-type", "application/json")
+            .with_body(
+                r#"{
             "main": {
                 "temp": 15.0
             },
@@ -741,38 +742,36 @@ mod tests {
                 }
             ],
             "name": "London"
-        }"#)
-        .create();
+        }"#,
+            )
+            .create();
 
-    let city = "London".to_string();
-    let url = format!("{}/data/2.5/weather?q={}&appid=mock_api_key&units=metric", &mockito::server_url(), city);
+        let city = "London".to_string();
+        let url = format!(
+            "{}/data/2.5/weather?q={}&appid=mock_api_key&units=metric",
+            &mockito::server_url(),
+            city
+        );
 
-    let client = Client::new();
-    let response = client.get(&url).send().unwrap();
+        let client = Client::new();
+        let response = client.get(&url).send().unwrap();
 
-    if response.status().is_success() {
-        let json: Value = response.json().unwrap();
-        let temperature = json["main"]["temp"].as_f64().unwrap();
-        let weather = json["weather"][0]["description"]
-            .as_str()
-            .unwrap()
-            .to_string();
-        let weather_id = json["weather"][0]["id"].as_i64().unwrap();
-        let city_name_fixed = json["name"].as_str().unwrap().to_string();
+        if response.status().is_success() {
+            let json: Value = response.json().unwrap();
+            let temperature = json["main"]["temp"].as_f64().unwrap();
+            let weather = json["weather"][0]["description"]
+                .as_str()
+                .unwrap()
+                .to_string();
+            let weather_id = json["weather"][0]["id"].as_i64().unwrap();
+            let city_name_fixed = json["name"].as_str().unwrap().to_string();
 
-        assert_eq!(city_name_fixed, "London");
-        assert!(temperature > -50.0 && temperature < 50.0);
-        assert!(!weather.is_empty());
-        assert!(weather_id > 0);
-    } else {
-        panic!("Failed to get weather data");
-    }
+            assert_eq!(city_name_fixed, "London");
+            assert!(temperature > -50.0 && temperature < 50.0);
+            assert!(!weather.is_empty());
+            assert!(weather_id > 0);
+        } else {
+            panic!("Failed to get weather data");
+        }
     }
 }
-
-
-
-
-
-
-
